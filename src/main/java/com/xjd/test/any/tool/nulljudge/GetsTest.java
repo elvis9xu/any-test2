@@ -1,5 +1,7 @@
 package com.xjd.test.any.tool.nulljudge;
 
+import java.util.List;
+
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,11 @@ public class GetsTest {
 		System.out.println(Gets.get(wrapA2.getAdd(), "HELLO"));
 		System.out.println(Gets.get(wrapA2.getAdd().getFormat(), "HELLO"));
 		System.out.println(Gets.get(wrapA2.getAdd().getInfo().getOthers(), "HELLO"));
+
+		System.out.println(Gets.get(wrapA2.getAdd().getInfo().getList().get(0), "HELLO"));
+		if (Gets.get(wrapA2.getAdd().getInfo().getList()) == null) {
+			System.out.println("list is null");
+		}
 	}
 
 	@Getter
@@ -55,5 +62,6 @@ public class GetsTest {
 	@Setter
 	public static class Info {
 		String others;
+		List<String> list;
 	}
 }

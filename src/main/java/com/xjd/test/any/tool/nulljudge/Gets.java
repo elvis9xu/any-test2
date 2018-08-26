@@ -1,13 +1,9 @@
 package com.xjd.test.any.tool.nulljudge;
 
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 
 import net.sf.cglib.proxy.Enhancer;
 import net.sf.cglib.proxy.MethodInterceptor;
@@ -24,6 +20,7 @@ public abstract class Gets {
 	private static final Logger log = LoggerFactory.getLogger(Gets.class);
 
 	public static <T> T wrap(T source) {
+		if (source instanceof Wrap) return source;
 		if (source == null) {
 			throw new IllegalArgumentException("The input parameter cannot be null or use wrap(T source, Class<T> clazz) instead");
 		}
@@ -31,6 +28,7 @@ public abstract class Gets {
 	}
 
 	public static <T> T wrap(T source, Class<T> clazz) {
+		if (source instanceof Wrap) return source;
 		if (clazz == null) {
 			throw new IllegalArgumentException("The class parameter cannot be null");
 		}
@@ -41,14 +39,18 @@ public abstract class Gets {
 
 		Enhancer enhancer = new Enhancer();
 		enhancer.setSuperclass(clazz);
-		enhancer.setInterfaces(new Class[]{Wrap.class});
+		if (clazz.isInterface()) {
+			enhancer.setInterfaces(new Class[]{Wrap.class, clazz});
+		} else {
+			enhancer.setInterfaces(new Class[]{Wrap.class});
+		}
 		enhancer.setCallback(new GetInterceptor<T>(source, clazz));
-		T wrap = createWrap(enhancer, clazz);
+		T wrap = createWrap(enhancer, clazz, source);
 
 		return wrap;
 	}
 
-	protected static <T> T createWrap(Enhancer enhancer, Class<T> clazz) {
+	protected static <T> T createWrap(Enhancer enhancer, Class<T> clazz, T source) {
 		try {
 			return (T) enhancer.create();
 		} catch (Exception e) {
@@ -65,7 +67,8 @@ public abstract class Gets {
 				}
 			}
 		}
-		throw new IllegalArgumentException("no constructor can be use for class '" + clazz + "'");
+		log.info("cannot proxy class '{}' due to no constructor can be used to initiate it", clazz);
+		return source;
 	}
 
 	protected static Object casualValueForType(Class clazz) {
@@ -80,10 +83,6 @@ public abstract class Gets {
 		}
 		// other primitives are numbers
 		return Byte.valueOf((byte) 0);
-	}
-
-	protected static String cacheKey(Object source, Class clazz) {
-		return clazz + ":" + source;
 	}
 
 	public static boolean isNull(Object object) {
@@ -108,7 +107,6 @@ public abstract class Gets {
 	protected static class GetInterceptor<T> implements MethodInterceptor {
 		protected T source;
 		protected Class<T> clazz;
-		protected Map<Method, Object> cache = new HashMap<>();
 
 		public GetInterceptor(T source, Class<T> clazz) {
 			this.source = source;
@@ -117,50 +115,36 @@ public abstract class Gets {
 
 		@Override
 		public Object intercept(Object obj, Method method, Object[] args, MethodProxy proxy) throws Throwable {
+			String methodName = method.getName();
 			// Wrap
-			if (method.getName().equals("_source")) {
+			if (methodName.equals("_source")) {
 				return source;
 			}
-			if (method.getName().equals("_class")) {
+			if (methodName.equals("_class")) {
 				return clazz;
 			}
 			// Object
-			if (method.getName().equals("getClass")) {
+			if (methodName.equals("getClass")) {
 				return clazz;
 			}
-			if (method.getName().equals("equals")) {
+			if (methodName.equals("equals")) {
 				return source == null ? source == args[0] : source.equals(args[0]);
 			}
+			Class<?> returnType = method.getReturnType();
 			// return primitives
-			if (method.getReturnType().isPrimitive()) {
+			if (returnType.isPrimitive()) {
 				return proxy.invoke(source, args);
 			}
 			// return final type
-			if (Modifier.isFinal(method.getReturnType().getModifiers())) {
+			if (Modifier.isFinal(returnType.getModifiers())) {
 				return source == null ? null : proxy.invoke(source, args);
 			}
 			// return non final type
-			Object cachedRt = cache.get(method);
-			if (cachedRt != null) return cachedRt;
-
 			Object rt = source == null ? null : proxy.invoke(source, args);
-			Object wrapRt = Gets.wrap(rt, (Class<Object>)(rt == null ? method.getReturnType() : rt.getClass()));
-			if (wrapRt instanceof Wrap) { // 只缓存代理对象
-				cache.put(method, wrapRt);
-			}
+			Object wrapRt = Gets.wrap(rt, (Class<Object>)(rt == null ? returnType : rt.getClass()));
 			return wrapRt;
 		}
 
 	}
-
-	protected static class ObjectWeakReference extends WeakReference {
-		protected String key;
-		public ObjectWeakReference(Object referent, ReferenceQueue q, String key) {
-			super(referent, q);
-			this.key = key;
-		}
-	}
-
-
 
 }
