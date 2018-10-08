@@ -1,4 +1,4 @@
-package com.xjd.test.any.perfermance;
+package com.xjd.test.any.performance;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
